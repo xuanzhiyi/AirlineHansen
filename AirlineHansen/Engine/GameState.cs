@@ -60,12 +60,20 @@ public class GameState
     }
 
     /// <summary>
-    /// Advance game time by one day
+    /// Advance game time by one tick (2 minutes of game time per 16ms real time)
+    /// This gives ~1 game day per ~12 real seconds at 1.0x speed
     /// </summary>
     public void AdvanceDayOneTick()
     {
-        GameDay++;
-        GameTime = GameTime.AddDays(1);
+        var tmp = GameTime;
+
+		GameTime = GameTime.AddHours(1);  // Each tick advances by 1 hour (24 ticks = 1 day)
+
+        // Only increment GameDay when we cross midnight
+        if (GameTime.Hour == 0 && GameTime.Day > tmp.Day)
+        {
+            GameDay++;
+        }
     }
 
     /// <summary>

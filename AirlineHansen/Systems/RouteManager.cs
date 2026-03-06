@@ -19,9 +19,30 @@ public class RouteManager
     }
 
     /// <summary>
-    /// Create a new route
+    /// Calculate optimal flights per day based on distance
     /// </summary>
-    public bool CreateRoute(int originCityId, int destinationCityId, int aircraftId, decimal ticketPrice, int flightsPerDay = 1)
+    public int CalculateFlightsPerDay(double distanceKm)
+    {
+        // Flight time = distance / 500 km/h
+        // Turn-around time = 2 hours (boarding, refueling, cleaning)
+        // Total cycle time per flight
+
+        double flightTimeHours = distanceKm / 500.0;
+        double turnAroundTimeHours = 2.0;
+        double cycleTimes = flightTimeHours + turnAroundTimeHours;
+
+        // Available hours per day
+        const double hoursPerDay = 24.0;
+        int maxFlights = (int)(hoursPerDay / cycleTimes);
+
+        // Cap maximum flights
+        return Math.Max(1, Math.Min(maxFlights, 5));
+    }
+
+    /// <summary>
+    /// Create a new route with automatic flights per day calculation
+    /// </summary>
+    public bool CreateRoute(int originCityId, int destinationCityId, int aircraftId, decimal ticketPrice, int flightsPerDay = 0)
     {
         // Validate cities exist
         var originCity = CityDatabase.GetCityById(originCityId);
@@ -47,6 +68,9 @@ public class RouteManager
             r.IsActive))
             return false;
 
+        // Auto-calculate flights per day if not specified
+        int calculatedFlightsPerDay = flightsPerDay > 0 ? flightsPerDay : CalculateFlightsPerDay(distance);
+
         var route = new Route(
             _gameState.NextRouteId++,
             originCityId,
@@ -55,11 +79,34 @@ public class RouteManager
             ticketPrice
         )
         {
-            FlightsPerDay = flightsPerDay
+            FlightsPerDay = 1  // Use 1 flight per day for continuous shuttle (plane goes A→B→A)
         };
 
         _gameState.Routes.Add(route);
         aircraft.IsAvailable = false; // Aircraft is now dedicated to this route
+
+        // Automatically create return route for continuous shuttle service
+        // Check if return route already exists to avoid duplicates
+        if (!_gameState.Routes.Any(r =>
+            r.OriginCityId == destinationCityId &&
+            r.DestinationCityId == originCityId &&
+            r.IsActive))
+        {
+            var returnRoute = new Route(
+                _gameState.NextRouteId++,
+                destinationCityId,
+                originCityId,
+                aircraftId,  // Same aircraft handles return flights
+                ticketPrice
+            )
+            {
+                FlightsPerDay = 1,  // Return route uses 1 flight per day (same plane continues shuttle)
+                IsReturnRoute = true  // Mark as return route for staggered scheduling
+            };
+
+            _gameState.Routes.Add(returnRoute);
+            // Aircraft already marked as unavailable from forward route
+        }
 
         return true;
     }

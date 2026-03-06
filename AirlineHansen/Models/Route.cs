@@ -38,6 +38,11 @@ public class Route
     public int FlightsPerDay { get; set; } = 1;
 
     /// <summary>
+    /// Whether this is a return/reverse route (for staggering shuttle flights)
+    /// </summary>
+    public bool IsReturnRoute { get; set; } = false;
+
+    /// <summary>
     /// Date route was created
     /// </summary>
     public DateTime CreatedDate { get; set; }

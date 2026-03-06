@@ -53,8 +53,10 @@ public class TimeManager
         while (_timeUntilTick <= 0)
         {
             ticks++;
-            _timeUntilTick += SecondsPerGameDay;
-        }
+            _timeUntilTick += SecondsPerGameDay / 24.0;
+		}
+        if(ticks> 0 )
+			Console.WriteLine("break");
 
         return ticks;
     }
@@ -90,6 +92,6 @@ public class TimeManager
     /// </summary>
     public void Reset()
     {
-        _timeUntilTick = SecondsPerGameDay;
+        _timeUntilTick = SecondsPerGameDay / 24.0;  // 24 ticks per game day
     }
 }

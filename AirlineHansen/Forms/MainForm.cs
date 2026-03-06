@@ -19,6 +19,9 @@ public partial class MainForm : Form
     private CrewManager _crewManager;
     private LoanManager _loanManager;
 
+    // Timing
+    private System.Diagnostics.Stopwatch _frameTimer = new();
+
     // UI Components
     private MapControl? _mapControl;
     private Timer? _gameLoopTimer;
@@ -49,26 +52,29 @@ public partial class MainForm : Form
     private void InitializeComponent()
     {
         this.ClientSize = new Size(1400, 900);
-        this.Text = "Airline Tycoon - Empire Building Simulator";
+        this.Text = "✈ Airline Tycoon - Empire Building Simulator";
         this.StartPosition = FormStartPosition.CenterScreen;
-        this.BackColor = Color.LightGray;
+        this.BackColor = Color.FromArgb(230, 240, 245);
+        this.Font = new Font("Segoe UI", 10);
 
         // Main layout with menu bar
         var mainPanel = new Panel { Dock = DockStyle.Fill };
         this.Controls.Add(mainPanel);
 
         // Menu strip
-        var menuStrip = new MenuStrip();
-        var gameMenu = new ToolStripMenuItem("Game");
+        var menuStrip = new MenuStrip { BackColor = Color.FromArgb(40, 80, 140) };
+        menuStrip.ForeColor = Color.White;
+
+        var gameMenu = new ToolStripMenuItem("Game") { ForeColor = Color.White };
         gameMenu.DropDownItems.Add(new ToolStripMenuItem("New Game", null, (s, e) => NewGame()));
         gameMenu.DropDownItems.Add(new ToolStripSeparator());
         gameMenu.DropDownItems.Add(new ToolStripMenuItem("Exit", null, (s, e) => this.Close()));
 
-        var routeMenu = new ToolStripMenuItem("Operations");
-        routeMenu.DropDownItems.Add(new ToolStripMenuItem("New Route", null, (s, e) => OpenRouteDialog()));
-        routeMenu.DropDownItems.Add(new ToolStripMenuItem("Buy Aircraft", null, (s, e) => OpenAircraftDialog()));
-        routeMenu.DropDownItems.Add(new ToolStripMenuItem("Hire Crew", null, (s, e) => OpenCrewDialog()));
-        routeMenu.DropDownItems.Add(new ToolStripMenuItem("Take Loan", null, (s, e) => OpenLoanDialog()));
+        var routeMenu = new ToolStripMenuItem("Operations") { ForeColor = Color.White };
+        routeMenu.DropDownItems.Add(new ToolStripMenuItem("📍 New Route", null, (s, e) => OpenRouteDialog()));
+        routeMenu.DropDownItems.Add(new ToolStripMenuItem("✈ Buy Aircraft", null, (s, e) => OpenAircraftDialog()));
+        routeMenu.DropDownItems.Add(new ToolStripMenuItem("👥 Hire Crew", null, (s, e) => OpenCrewDialog()));
+        routeMenu.DropDownItems.Add(new ToolStripMenuItem("💰 Take Loan", null, (s, e) => OpenLoanDialog()));
 
         menuStrip.Items.Add(gameMenu);
         menuStrip.Items.Add(routeMenu);
@@ -79,25 +85,30 @@ public partial class MainForm : Form
         var statusPanel = new Panel
         {
             Dock = DockStyle.Bottom,
-            Height = 80,
-            BackColor = Color.White,
-            BorderStyle = BorderStyle.Fixed3D
+            Height = 90,
+            BackColor = Color.FromArgb(50, 100, 160),
+            BorderStyle = BorderStyle.FixedSingle
         };
 
-        _dayLabel = new Label { AutoSize = true, Location = new Point(10, 10), Text = "Day: 1" };
-        _balanceLabel = new Label { AutoSize = true, Location = new Point(10, 30), Text = "Balance: €100,000" };
-        _statusLabel = new Label { AutoSize = true, Location = new Point(10, 50), Text = "Status: Running" };
+        var dayLabelTitle = new Label { Text = "📅 Day", Location = new Point(15, 10), AutoSize = true, Font = new Font("Segoe UI", 9, FontStyle.Bold), ForeColor = Color.White };
+        _dayLabel = new Label { Location = new Point(15, 28), Text = "1", AutoSize = true, Font = new Font("Segoe UI", 14, FontStyle.Bold), ForeColor = Color.FromArgb(100, 200, 255) };
 
-        _pauseButton = new Button { Text = "Pause", Location = new Point(800, 10), Width = 80, Height = 30 };
+        var balanceLabelTitle = new Label { Text = "💵 Balance", Location = new Point(150, 10), AutoSize = true, Font = new Font("Segoe UI", 9, FontStyle.Bold), ForeColor = Color.White };
+        _balanceLabel = new Label { Location = new Point(150, 28), Text = "€100,000", AutoSize = true, Font = new Font("Segoe UI", 12, FontStyle.Bold), ForeColor = Color.FromArgb(100, 255, 100) };
+
+        var statusLabelTitle = new Label { Text = "⚙ Status", Location = new Point(400, 10), AutoSize = true, Font = new Font("Segoe UI", 9, FontStyle.Bold), ForeColor = Color.White };
+        _statusLabel = new Label { Location = new Point(400, 28), Text = "Running", AutoSize = true, Font = new Font("Segoe UI", 11, FontStyle.Bold), ForeColor = Color.Yellow };
+
+        _pauseButton = new Button { Text = "⏸ Pause", Location = new Point(750, 12), Width = 90, Height = 35, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(100, 150, 200), ForeColor = Color.White, Font = new Font("Segoe UI", 9, FontStyle.Bold) };
         _pauseButton.Click += (s, e) => TogglePause();
 
-        _speedUpButton = new Button { Text = "Speed ↑", Location = new Point(900, 10), Width = 80, Height = 30 };
+        _speedUpButton = new Button { Text = "⏩ Speed ↑", Location = new Point(850, 12), Width = 90, Height = 35, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(100, 150, 200), ForeColor = Color.White, Font = new Font("Segoe UI", 9, FontStyle.Bold) };
         _speedUpButton.Click += (s, e) => SpeedUp();
 
-        _speedDownButton = new Button { Text = "Speed ↓", Location = new Point(1000, 10), Width = 80, Height = 30 };
+        _speedDownButton = new Button { Text = "⏪ Speed ↓", Location = new Point(950, 12), Width = 90, Height = 35, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(100, 150, 200), ForeColor = Color.White, Font = new Font("Segoe UI", 9, FontStyle.Bold) };
         _speedDownButton.Click += (s, e) => SpeedDown();
 
-        statusPanel.Controls.AddRange(new Control[] { _dayLabel, _balanceLabel, _statusLabel, _pauseButton, _speedUpButton, _speedDownButton });
+        statusPanel.Controls.AddRange(new Control[] { dayLabelTitle, _dayLabel, balanceLabelTitle, _balanceLabel, statusLabelTitle, _statusLabel, _pauseButton, _speedUpButton, _speedDownButton });
         mainPanel.Controls.Add(statusPanel);
 
         // Map control
@@ -119,7 +130,8 @@ public partial class MainForm : Form
     private void StartGameLoop()
     {
         _timeManager.Reset();
-        _gameLoopTimer = new Timer { Interval = 50 }; // 50ms per tick
+        _frameTimer.Start();
+        _gameLoopTimer = new Timer { Interval = 16 }; // Target ~60 FPS (WinForms Timer precision varies)
         _gameLoopTimer.Tick += GameLoopTick;
         _gameLoopTimer.Start();
     }
@@ -133,8 +145,12 @@ public partial class MainForm : Form
             return;
         }
 
+        // Get actual elapsed time since last frame (WinForms Timer is not precise)
+        double deltaSeconds = _frameTimer.Elapsed.TotalSeconds;
+        _frameTimer.Restart();
+
         // Update time and get number of ticks
-        int ticks = _timeManager.UpdateTime(0.05); // 50ms passed
+        int ticks = _timeManager.UpdateTime(deltaSeconds);
 
         // Process each game tick
         for (int i = 0; i < ticks; i++)
@@ -144,22 +160,35 @@ public partial class MainForm : Form
 
         // Update UI
         UpdateStatusDisplay();
+        _mapControl?.SetGameTime(_gameState.GameTime);
         _mapControl?.SetRoutes(_gameState.Routes);
         _mapControl?.SetFlights(_simulationEngine.GetActiveFlights());
+        _mapControl?.Invalidate();
     }
 
     private void UpdateStatusDisplay()
     {
         if (_dayLabel != null)
-            _dayLabel.Text = $"Day: {_gameState.GameDay}";
+        {
+            int year = 2024 + (_gameState.GameDay / 365);
+            int day = (_gameState.GameDay % 365) + 1;
+            _dayLabel.Text = $"{_gameState.GameDay} | Year {year}";
+        }
 
         if (_balanceLabel != null)
-            _balanceLabel.Text = $"Balance: {MathUtils.FormatCurrency(_gameState.Balance)} | Aircraft: {_gameState.Fleet.Count} | Routes: {_gameState.GetActiveRoutes().Count}";
+        {
+            string balanceColor = _gameState.Balance >= 0 ? "✓" : "✗";
+            _balanceLabel.Text = $"{balanceColor} {MathUtils.FormatCurrency(_gameState.Balance)}";
+            _balanceLabel.ForeColor = _gameState.Balance >= 0 ? Color.FromArgb(100, 255, 100) : Color.FromArgb(255, 100, 100);
+        }
 
         if (_statusLabel != null)
         {
-            string status = _timeManager.IsPaused ? "PAUSED" : "RUNNING";
-            _statusLabel.Text = $"Status: {status} (Speed: {_timeManager.SpeedMultiplier:F1}x)";
+            string status = _timeManager.IsPaused ? "⏸ PAUSED" : "▶ RUNNING";
+            int aircraft = _gameState.Fleet.Count;
+            int routes = _gameState.GetActiveRoutes().Count;
+            _statusLabel.Text = $"{status} ({_timeManager.SpeedMultiplier:F1}x) | ✈{aircraft} routes {routes}";
+            _statusLabel.ForeColor = _timeManager.IsPaused ? Color.FromArgb(255, 200, 100) : Color.Yellow;
         }
     }
 

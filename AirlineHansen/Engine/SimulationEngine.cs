@@ -10,6 +10,7 @@ public class SimulationEngine
 {
     private GameState _gameState;
     private TimeManager _timeManager;
+    private int _lastFlightCreationDay = -1; // Track which day flights were created to avoid duplicates
 
     // Simulation parameters
     private const double BaseDemandFactor = 0.001; // Passengers per population unit
@@ -32,11 +33,19 @@ public class SimulationEngine
         // Advance game time
         _gameState.AdvanceDayOneTick();
 
-        // Update all flights
-        UpdateFlights();
+        // Create new flights for today (only once per day)
+        int currentDay = _gameState.GameTime.Day;
+        if (currentDay != _lastFlightCreationDay)
+        {
+            CreateFlights();
+            _lastFlightCreationDay = currentDay;
+        }
 
-        // Calculate demand and book passengers
+        // Calculate demand and book passengers for scheduled flights
         CalculatePassengerDemand();
+
+        // Transition flights and handle arrivals
+        UpdateFlightStatuses();
 
         // Update finances
         UpdateFinances();
@@ -49,44 +58,74 @@ public class SimulationEngine
     }
 
     /// <summary>
-    /// Update flight statuses and handle arrivals/departures
+    /// Create new flights for today (multiple flights per day based on route FlightsPerDay)
     /// </summary>
-    private void UpdateFlights()
+    private void CreateFlights()
     {
         var routes = _gameState.GetActiveRoutes();
 
         foreach (var route in routes)
         {
-            // Get aircraft for this route
             var aircraft = _gameState.Fleet.FirstOrDefault(a => a.Id == route.AircraftId);
-            if (aircraft == null || !aircraft.IsAvailable)
+            if (aircraft == null)
                 continue;
 
-            // Create new flights for today based on flights per day
-            for (int i = 0; i < route.FlightsPerDay; i++)
+            // Create FlightsPerDay flights per route, staggered throughout the day
+            int flightsToCreate = Math.Max(1, route.FlightsPerDay);
+
+            for (int i = 0; i < flightsToCreate; i++)
             {
+                // Calculate staggered departure time across 24 game hours
+                TimeSpan offset = TimeSpan.FromHours(24.0 * i / flightsToCreate);
+                DateTime scheduledDeparture = _gameState.GameTime.Date.Add(offset);
+
+                // For return routes, offset by 12 hours (flight duration) to prevent simultaneous flights
+                // This ensures one plane flies forward, then immediately returns
+                if (route.IsReturnRoute)
+                {
+                    scheduledDeparture = scheduledDeparture.AddHours(12);
+                }
+
+                // Only create flight if it hasn't already been created today
+                if (_gameState.AllFlights.Any(f => f.RouteId == route.Id &&
+                    f.ScheduledDeparture == scheduledDeparture &&
+                    f.Status != "Completed"))
+                    continue;
+
                 var flight = new Flight(
                     _gameState.NextFlightId++,
                     route.Id,
                     aircraft.Capacity,
-                    _gameState.GameTime
+                    scheduledDeparture
                 );
 
                 flight.Status = "Scheduled";
+                // ActualDeparture is set when flight transitions to InProgress in UpdateFlightStatuses()
                 _gameState.AllFlights.Add(flight);
                 route.Flights.Add(flight);
             }
         }
+    }
 
-        // Update flight statuses
+    /// <summary>
+    /// Update flight statuses and handle departures/arrivals
+    /// </summary>
+    private void UpdateFlightStatuses()
+    {
         foreach (var flight in _gameState.AllFlights)
         {
-            if (flight.Status == "Scheduled")
+            if (flight.Status == "Scheduled" && flight.ScheduledDeparture <= _gameState.GameTime)
             {
-                // Move to in progress (flight departs)
+                // Move to in progress (flight departs when ScheduledDeparture time reached)
                 flight.Status = "InProgress";
+                // Set actual departure time to current game time
                 flight.ActualDeparture = _gameState.GameTime;
 
+                // Always set arrival time (flight lasts 720 minutes = 12 hours of game time)
+                // = 12 ticks = 2.5 seconds of real animation at 60 FPS (5 sec/day ÷ 24 ticks)
+                flight.EstimatedArrival = _gameState.GameTime.AddMinutes(720);
+
+                // Calculate costs based on route and cities
                 var route = _gameState.Routes.FirstOrDefault(r => r.Id == flight.RouteId);
                 if (route != null)
                 {
@@ -96,9 +135,7 @@ public class SimulationEngine
                     if (originCity != null && destCity != null)
                     {
                         double distance = CityDatabase.CalculateDistance(originCity, destCity);
-                        // Assume 500 km/h cruise speed
-                        double flightDurationHours = distance / 500.0;
-                        flight.EstimatedArrival = _gameState.GameTime.AddHours(flightDurationHours);
+                        // Distance info can be used for future cost calculations
                     }
                 }
             }

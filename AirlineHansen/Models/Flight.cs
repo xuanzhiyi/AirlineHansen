@@ -62,6 +62,11 @@ public class Flight
     /// </summary>
     public double LoadFactor => Capacity > 0 ? (double)PassengersBooked / Capacity : 0;
 
+    /// <summary>
+    /// Whether this is a return flight (for animation reversal)
+    /// </summary>
+    public bool IsReturnFlight { get; set; } = false;
+
     public Flight()
     {
     }
