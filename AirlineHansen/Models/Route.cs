@@ -43,6 +43,11 @@ public class Route
     public bool IsReturnRoute { get; set; } = false;
 
     /// <summary>
+    /// Expected flight time in minutes (for scheduling return flights)
+    /// </summary>
+    public double ExpectedFlightTimeMinutes { get; set; } = 0;
+
+    /// <summary>
     /// Date route was created
     /// </summary>
     public DateTime CreatedDate { get; set; }

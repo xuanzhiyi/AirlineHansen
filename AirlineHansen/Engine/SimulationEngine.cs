@@ -79,11 +79,12 @@ public class SimulationEngine
                 TimeSpan offset = TimeSpan.FromHours(24.0 * i / flightsToCreate);
                 DateTime scheduledDeparture = _gameState.GameTime.Date.Add(offset);
 
-                // For return routes, offset by 12 hours (flight duration) to prevent simultaneous flights
-                // This ensures one plane flies forward, then immediately returns
+                // For return routes, offset by flight_time + ground_time to prevent simultaneous flights
+                // This ensures one plane completes outbound + ground time before return flight departs
                 if (route.IsReturnRoute)
                 {
-                    scheduledDeparture = scheduledDeparture.AddHours(12);
+                    double totalCycleMinutes = route.ExpectedFlightTimeMinutes + 240; // 240 = 4 hours ground time
+                    scheduledDeparture = scheduledDeparture.AddMinutes(totalCycleMinutes);
                 }
 
                 // Only create flight if it hasn't already been created today
@@ -121,28 +122,39 @@ public class SimulationEngine
                 // Set actual departure time to current game time
                 flight.ActualDeparture = _gameState.GameTime;
 
-                // Always set arrival time (flight lasts 720 minutes = 12 hours of game time)
-                // = 12 ticks = 2.5 seconds of real animation at 60 FPS (5 sec/day ÷ 24 ticks)
-                flight.EstimatedArrival = _gameState.GameTime.AddMinutes(720);
-
-                // Calculate costs based on route and cities
+                // Calculate realistic flight duration based on distance and aircraft speed
                 var route = _gameState.Routes.FirstOrDefault(r => r.Id == flight.RouteId);
                 if (route != null)
                 {
+                    var aircraft = _gameState.Fleet.FirstOrDefault(a => a.Id == route.AircraftId);
                     var originCity = CityDatabase.GetCityById(route.OriginCityId);
                     var destCity = CityDatabase.GetCityById(route.DestinationCityId);
 
-                    if (originCity != null && destCity != null)
+                    if (aircraft != null && originCity != null && destCity != null)
                     {
                         double distance = CityDatabase.CalculateDistance(originCity, destCity);
-                        // Distance info can be used for future cost calculations
+
+                        // Flight time in minutes: (distance km / cruise speed km/h) * 60 minutes
+                        // Add 30 minutes for taxi, takeoff, and landing
+                        // Inflated by 100% to make flight duration differences more noticeable
+                        double flightTimeMinutes = ((distance / aircraft.CruiseSpeed) * 60 + 30) * 2;
+                        flight.EstimatedArrival = _gameState.GameTime.AddMinutes(flightTimeMinutes);
                     }
                 }
+
+                // If EstimatedArrival wasn't set (missing route/aircraft/cities), use default
+                if (flight.EstimatedArrival == null)
+                {
+                    flight.EstimatedArrival = _gameState.GameTime.AddMinutes(720); // 12 hour fallback
+                }
             }
-            else if (flight.Status == "InProgress" && flight.EstimatedArrival <= _gameState.GameTime)
+            else if (flight.Status == "InProgress" && flight.EstimatedArrival <= _gameState.GameTime && flight.ActualArrival == null)
             {
-                // Flight arrives
-                flight.Status = "Completed";
+                // Flight arrives - set arrival time and when it's ready to depart again
+                flight.ActualArrival = _gameState.GameTime;
+
+                // Aircraft needs ground time for refueling, boarding, offboarding (default 4 hours = 240 minutes)
+                flight.ReadyToDepartTime = _gameState.GameTime.AddMinutes(flight.GroundTimeMinutes);
 
                 // Calculate costs
                 var route = _gameState.Routes.FirstOrDefault(r => r.Id == flight.RouteId);
@@ -162,6 +174,11 @@ public class SimulationEngine
                         _gameState.AddTransaction(flight.Profit, $"Flight {flight.Id} profit");
                     }
                 }
+            }
+            else if (flight.Status == "InProgress" && flight.ReadyToDepartTime != null && flight.ReadyToDepartTime <= _gameState.GameTime)
+            {
+                // Aircraft has finished ground time, mark flight as completed
+                flight.Status = "Completed";
             }
         }
 

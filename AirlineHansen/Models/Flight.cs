@@ -38,9 +38,24 @@ public class Flight
     public DateTime? ActualDeparture { get; set; }
 
     /// <summary>
-    /// Estimated arrival time
+    /// Estimated arrival time (when plane lands)
     /// </summary>
     public DateTime? EstimatedArrival { get; set; }
+
+    /// <summary>
+    /// Actual arrival time (null if not arrived yet)
+    /// </summary>
+    public DateTime? ActualArrival { get; set; }
+
+    /// <summary>
+    /// Ground time in game minutes (for refueling, boarding, offboarding)
+    /// </summary>
+    public int GroundTimeMinutes { get; set; } = 240;  // Default 4 game hours = 240 minutes
+
+    /// <summary>
+    /// Time when aircraft is ready to depart from destination
+    /// </summary>
+    public DateTime? ReadyToDepartTime { get; set; }
 
     /// <summary>
     /// Revenue from ticket sales

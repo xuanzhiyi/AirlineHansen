@@ -71,6 +71,9 @@ public class RouteManager
         // Auto-calculate flights per day if not specified
         int calculatedFlightsPerDay = flightsPerDay > 0 ? flightsPerDay : CalculateFlightsPerDay(distance);
 
+        // Calculate expected flight time: (distance / cruise_speed) * 60 + 30 min (taxi/takeoff/landing), then doubled
+        double expectedFlightTime = ((distance / aircraft.CruiseSpeed) * 60 + 30) * 2;
+
         var route = new Route(
             _gameState.NextRouteId++,
             originCityId,
@@ -79,7 +82,8 @@ public class RouteManager
             ticketPrice
         )
         {
-            FlightsPerDay = 1  // Use 1 flight per day for continuous shuttle (plane goes A→B→A)
+            FlightsPerDay = 1,  // Use 1 flight per day for continuous shuttle (plane goes A→B→A)
+            ExpectedFlightTimeMinutes = expectedFlightTime
         };
 
         _gameState.Routes.Add(route);
@@ -101,7 +105,8 @@ public class RouteManager
             )
             {
                 FlightsPerDay = 1,  // Return route uses 1 flight per day (same plane continues shuttle)
-                IsReturnRoute = true  // Mark as return route for staggered scheduling
+                IsReturnRoute = true,  // Mark as return route for staggered scheduling
+                ExpectedFlightTimeMinutes = expectedFlightTime  // Same flight time for return trip
             };
 
             _gameState.Routes.Add(returnRoute);

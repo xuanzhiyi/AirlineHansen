@@ -24,6 +24,11 @@ public class Aircraft
     public decimal FuelCostPerKm { get; set; }
 
     /// <summary>
+    /// Cruise speed in km/h
+    /// </summary>
+    public int CruiseSpeed { get; set; }
+
+    /// <summary>
     /// Purchase price in euros
     /// </summary>
     public decimal PurchasePrice { get; set; }
@@ -47,7 +52,7 @@ public class Aircraft
     {
     }
 
-    public Aircraft(int id, string model, int capacity, int maxRange, decimal fuelCostPerKm, decimal purchasePrice)
+    public Aircraft(int id, string model, int capacity, int maxRange, decimal fuelCostPerKm, decimal purchasePrice, int cruiseSpeed = 800)
     {
         Id = id;
         Model = model;
@@ -55,6 +60,7 @@ public class Aircraft
         MaxRange = maxRange;
         FuelCostPerKm = fuelCostPerKm;
         PurchasePrice = purchasePrice;
+        CruiseSpeed = cruiseSpeed;
     }
 
     public override string ToString() => $"{Model} ({Capacity} seats, {MaxRange}km range)";

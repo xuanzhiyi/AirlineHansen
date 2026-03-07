@@ -384,8 +384,8 @@ public class MapControl : Control
         g.TranslateTransform(x, y);
         g.RotateTransform((float)angleInDegrees);
 
-        // Scale factor for larger plane (1.5x bigger)
-        const float scale = 1.5f;
+        // Scale factor for plane (1.5x * 0.7 = 1.05)
+        const float scale = 1.05f;
 
         // Draw airplane shape (top-down view)
         // Main fuselage body

@@ -53,7 +53,8 @@ public class GameState
             50,  // seats
             1500, // km range
             0.05m, // €0.05 per km
-            5_000_000m
+            5_000_000m,
+            700  // cruise speed in km/h
         );
 
         Fleet.Add(startingAircraft);

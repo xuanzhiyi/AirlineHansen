@@ -20,7 +20,7 @@ public class AircraftManager
     /// <summary>
     /// Purchase a new aircraft
     /// </summary>
-    public bool PurchaseAircraft(string model, int capacity, int maxRange, decimal fuelCostPerKm, decimal purchasePrice)
+    public bool PurchaseAircraft(string model, int capacity, int maxRange, decimal fuelCostPerKm, decimal purchasePrice, int cruiseSpeed = 800)
     {
         if (!_financeManager.CanAfford(purchasePrice))
             return false;
@@ -31,7 +31,8 @@ public class AircraftManager
             capacity,
             maxRange,
             fuelCostPerKm,
-            purchasePrice
+            purchasePrice,
+            cruiseSpeed
         );
 
         _gameState.Fleet.Add(aircraft);
@@ -47,9 +48,9 @@ public class AircraftManager
     {
         return type switch
         {
-            "Small" => PurchaseAircraft("Airbus A220", 50, 1500, 0.05m, 5_000_000m),
-            "Medium" => PurchaseAircraft("Airbus A320", 150, 3000, 0.08m, 15_000_000m),
-            "Large" => PurchaseAircraft("Airbus A350", 300, 5000, 0.12m, 30_000_000m),
+            "Small" => PurchaseAircraft("Airbus A220", 50, 1500, 0.05m, 5_000_000m, 700),    // Regional jet
+            "Medium" => PurchaseAircraft("Airbus A320", 150, 3000, 0.08m, 15_000_000m, 840), // Narrow-body
+            "Large" => PurchaseAircraft("Airbus A350", 300, 5000, 0.12m, 30_000_000m, 910),  // Wide-body
             _ => false
         };
     }
