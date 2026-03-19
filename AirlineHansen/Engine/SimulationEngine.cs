@@ -10,11 +10,11 @@ public class SimulationEngine
 {
     private GameState _gameState;
     private TimeManager _timeManager;
-    private int _lastFlightCreationDay = -1; // Track which day flights were created to avoid duplicates
 
     // Simulation parameters
     private const double BaseDemandFactor = 0.001; // Passengers per population unit
     private const decimal PriceElasticity = 0.0002m; // Demand reduction per euro of price
+    private const int GroundTimeMinutes = 240; // 4 hours ground time at airport
 
     public SimulationEngine(GameState gameState, TimeManager timeManager)
     {
@@ -23,7 +23,7 @@ public class SimulationEngine
     }
 
     /// <summary>
-    /// Update game for one tick (one game day)
+    /// Update game for one tick (one game hour)
     /// </summary>
     public void UpdateOneTick()
     {
@@ -33,19 +33,14 @@ public class SimulationEngine
         // Advance game time
         _gameState.AdvanceDayOneTick();
 
-        // Create new flights for today (only once per day)
-        int currentDay = _gameState.GameTime.Day;
-        if (currentDay != _lastFlightCreationDay)
-        {
-            CreateFlights();
-            _lastFlightCreationDay = currentDay;
-        }
+        // Transition flights and handle arrivals (before creating new flights)
+        UpdateFlightStatuses();
+
+        // Schedule next flight for any idle aircraft
+        ScheduleNextFlights();
 
         // Calculate demand and book passengers for scheduled flights
         CalculatePassengerDemand();
-
-        // Transition flights and handle arrivals
-        UpdateFlightStatuses();
 
         // Update finances
         UpdateFinances();
@@ -58,76 +53,65 @@ public class SimulationEngine
     }
 
     /// <summary>
-    /// Create new flights for today (multiple flights per day based on route FlightsPerDay)
-    /// Flights are scheduled based on aircraft availability to avoid conflicts
+    /// Schedule the next flight for each aircraft that has no pending flights.
+    /// Each aircraft independently alternates between its forward and return routes.
     /// </summary>
-    private void CreateFlights()
+    private void ScheduleNextFlights()
     {
-        var routes = _gameState.GetActiveRoutes();
+        // Group active routes by aircraft
+        var routesByAircraft = _gameState.GetActiveRoutes()
+            .GroupBy(r => r.AircraftId);
 
-        foreach (var route in routes)
+        foreach (var aircraftRoutes in routesByAircraft)
         {
-            var aircraft = _gameState.Fleet.FirstOrDefault(a => a.Id == route.AircraftId);
+            var aircraft = _gameState.Fleet.FirstOrDefault(a => a.Id == aircraftRoutes.Key);
             if (aircraft == null)
                 continue;
 
-            // Find when this aircraft will be ready (after all pending flights on ANY route complete)
-            DateTime aircraftAvailableAt = _gameState.GameTime;
+            var routes = aircraftRoutes.ToList();
+            var routeIds = routes.Select(r => r.Id).ToHashSet();
 
-            // Check ALL flights for this aircraft (across all routes), not just this route
-            var allRoutesForAircraft = _gameState.Routes.Where(r => r.AircraftId == route.AircraftId);
-            var pendingFlights = _gameState.AllFlights
-                .Where(f => allRoutesForAircraft.Any(r => r.Id == f.RouteId) && (f.Status == "Scheduled" || f.Status == "InProgress"))
-                .OrderByDescending(f => f.ReadyToDepartTime ?? f.EstimatedArrival ?? f.ScheduledDeparture)
+            // Check if aircraft already has a pending flight (Scheduled or InProgress)
+            bool hasPendingFlight = _gameState.AllFlights
+                .Any(f => routeIds.Contains(f.RouteId) && (f.Status == "Scheduled" || f.Status == "InProgress"));
+
+            if (hasPendingFlight)
+                continue; // Aircraft is busy, don't schedule another flight
+
+            // Find the last completed flight to determine which route is next
+            var lastCompletedFlight = _gameState.AllFlights
+                .Where(f => routeIds.Contains(f.RouteId) && f.Status == "Completed")
+                .OrderByDescending(f => f.ActualArrival ?? f.ScheduledDeparture)
                 .FirstOrDefault();
 
-            if (pendingFlights?.ReadyToDepartTime.HasValue == true)
+            // Alternate between forward and return routes
+            Route nextRoute;
+            if (lastCompletedFlight == null)
             {
-                aircraftAvailableAt = pendingFlights.ReadyToDepartTime.Value;
+                // No previous flights - start with forward route
+                nextRoute = routes.FirstOrDefault(r => !r.IsReturnRoute) ?? routes.First();
             }
-            else if (pendingFlights?.EstimatedArrival.HasValue == true)
+            else
             {
-                // If no ReadyToDepartTime yet, use EstimatedArrival + ground time
-                aircraftAvailableAt = pendingFlights.EstimatedArrival.Value.AddMinutes(240);
-            }
-            else if (pendingFlights?.Status == "Scheduled")
-            {
-                // For Scheduled flights, calculate when aircraft will be ready using expected flight time
-                var flightRoute = _gameState.Routes.FirstOrDefault(r => r.Id == pendingFlights.RouteId);
-                if (flightRoute != null)
-                {
-                    double flightDurationPlusGround = flightRoute.ExpectedFlightTimeMinutes + 240;
-                    aircraftAvailableAt = pendingFlights.ScheduledDeparture.AddMinutes(flightDurationPlusGround);
-                }
+                // If last was forward, next is return; if last was return, next is forward
+                var lastRoute = routes.FirstOrDefault(r => r.Id == lastCompletedFlight.RouteId);
+                if (lastRoute?.IsReturnRoute == true)
+                    nextRoute = routes.FirstOrDefault(r => !r.IsReturnRoute) ?? routes.First();
+                else
+                    nextRoute = routes.FirstOrDefault(r => r.IsReturnRoute) ?? routes.First();
             }
 
-            // Create FlightsPerDay flights per route, scheduled at aircraft's available times
-            int flightsToCreate = Math.Max(1, route.FlightsPerDay);
+            // Schedule the next flight at current game time
+            var flight = new Flight(
+                _gameState.NextFlightId++,
+                nextRoute.Id,
+                aircraft.Capacity,
+                _gameState.GameTime
+            );
 
-            for (int i = 0; i < flightsToCreate; i++)
-            {
-                // Calculate time spacing between flights (24 hours / FlightsPerDay)
-                double minutesBetweenFlights = 24.0 * 60.0 / flightsToCreate;
-                DateTime scheduledDeparture = aircraftAvailableAt.AddMinutes(i * minutesBetweenFlights);
-
-                // Only create flight if it hasn't already been created
-                if (_gameState.AllFlights.Any(f => f.RouteId == route.Id &&
-                    f.ScheduledDeparture == scheduledDeparture &&
-                    f.Status != "Completed"))
-                    continue;
-
-                var flight = new Flight(
-                    _gameState.NextFlightId++,
-                    route.Id,
-                    aircraft.Capacity,
-                    scheduledDeparture
-                );
-
-                flight.Status = "Scheduled";
-                // ActualDeparture is set when flight transitions to InProgress in UpdateFlightStatuses()
-                _gameState.AllFlights.Add(flight);
-                route.Flights.Add(flight);
-            }
+            flight.Status = "Scheduled";
+            _gameState.AllFlights.Add(flight);
+            nextRoute.Flights.Add(flight);
         }
     }
 
