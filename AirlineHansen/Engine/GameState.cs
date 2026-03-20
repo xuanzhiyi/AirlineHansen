@@ -42,7 +42,7 @@ public class GameState
     }
 
     /// <summary>
-    /// Initialize game with starting aircraft
+    /// Initialize game with starting aircraft and crew
     /// </summary>
     public void Initialize()
     {
@@ -58,6 +58,23 @@ public class GameState
         );
 
         Fleet.Add(startingAircraft);
+
+        // Create starting crew and assign to starting aircraft
+        var pilot = new Crew(NextCrewId++, "Captain Hansen", "Pilot", 5000m)
+        {
+            HiredDate = GameTime,
+            AssignedAircraftId = startingAircraft.Id
+        };
+        var cabinCrew = new Crew(NextCrewId++, "Anna Berg", "CabinCrew", 3000m)
+        {
+            HiredDate = GameTime,
+            AssignedAircraftId = startingAircraft.Id
+        };
+
+        Crew.Add(pilot);
+        Crew.Add(cabinCrew);
+        startingAircraft.AssignedCrewIds.Add(pilot.Id);
+        startingAircraft.AssignedCrewIds.Add(cabinCrew.Id);
     }
 
     /// <summary>

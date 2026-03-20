@@ -33,14 +33,14 @@ public class SimulationEngine
         // Advance game time
         _gameState.AdvanceDayOneTick();
 
-        // Transition flights and handle arrivals (before creating new flights)
+        // Book passengers on scheduled flights (before departures so flights have passengers)
+        CalculatePassengerDemand();
+
+        // Transition flights and handle departures/arrivals
         UpdateFlightStatuses();
 
         // Schedule next flight for any idle aircraft
         ScheduleNextFlights();
-
-        // Calculate demand and book passengers for scheduled flights
-        CalculatePassengerDemand();
 
         // Update finances
         UpdateFinances();
@@ -101,6 +101,15 @@ public class SimulationEngine
                     nextRoute = routes.FirstOrDefault(r => r.IsReturnRoute) ?? routes.First();
             }
 
+            // Check aircraft has crew assigned (need at least 1 pilot)
+            var assignedCrew = _gameState.Crew
+                .Where(c => c.IsActive && c.AssignedAircraftId == aircraft.Id)
+                .ToList();
+
+            bool hasPilot = assignedCrew.Any(c => c.CrewType == "Pilot");
+            if (!hasPilot)
+                continue; // Cannot fly without a pilot
+
             // Schedule the next flight at current game time
             var flight = new Flight(
                 _gameState.NextFlightId++,
@@ -109,6 +118,8 @@ public class SimulationEngine
                 _gameState.GameTime
             );
 
+            // Assign crew to this flight
+            flight.CrewIds = assignedCrew.Select(c => c.Id).ToList();
             flight.Status = "Scheduled";
             _gameState.AllFlights.Add(flight);
             nextRoute.Flights.Add(flight);
@@ -163,7 +174,7 @@ public class SimulationEngine
                 // Aircraft needs ground time for refueling, boarding, offboarding (default 4 hours = 240 minutes)
                 flight.ReadyToDepartTime = _gameState.GameTime.AddMinutes(flight.GroundTimeMinutes);
 
-                // Calculate costs
+                // Calculate costs and revenue separately
                 var route = _gameState.Routes.FirstOrDefault(r => r.Id == flight.RouteId);
                 if (route != null)
                 {
@@ -174,11 +185,21 @@ public class SimulationEngine
                     if (aircraft != null && originCity != null && destCity != null)
                     {
                         double distance = CityDatabase.CalculateDistance(originCity, destCity);
-                        flight.Cost = aircraft.FuelCostPerKm * (decimal)distance + originCity.AirportFee + destCity.AirportFee;
+
+                        // Calculate individual cost components
+                        decimal fuelCost = aircraft.FuelCostPerKm * (decimal)distance;
+                        decimal originAirportFee = originCity.AirportFee;
+                        decimal destAirportFee = destCity.AirportFee;
+                        flight.Cost = fuelCost + originAirportFee + destAirportFee;
+
+                        // Calculate revenue from passengers
                         flight.Revenue = flight.PassengersBooked * route.TicketPrice;
 
-                        // Update balance
-                        _gameState.AddTransaction(flight.Profit, $"Flight {flight.Id} profit");
+                        // Record each transaction separately for tracking
+                        _gameState.AddTransaction(-fuelCost, $"Flight {flight.Id} fuel cost ({distance:F0}km)");
+                        _gameState.AddTransaction(-originAirportFee, $"Flight {flight.Id} airport fee: {originCity.Name}");
+                        _gameState.AddTransaction(-destAirportFee, $"Flight {flight.Id} airport fee: {destCity.Name}");
+                        _gameState.AddTransaction(flight.Revenue, $"Flight {flight.Id} ticket revenue ({flight.PassengersBooked} pax)");
                     }
                 }
             }

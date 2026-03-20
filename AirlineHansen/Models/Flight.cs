@@ -78,6 +78,11 @@ public class Flight
     public double LoadFactor => Capacity > 0 ? (double)PassengersBooked / Capacity : 0;
 
     /// <summary>
+    /// Crew member IDs assigned to this flight
+    /// </summary>
+    public List<int> CrewIds { get; set; } = new();
+
+    /// <summary>
     /// Whether this is a return flight (for animation reversal)
     /// </summary>
     public bool IsReturnFlight { get; set; } = false;

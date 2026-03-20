@@ -38,6 +38,36 @@ public class AircraftManager
         _gameState.Fleet.Add(aircraft);
         _financeManager.RecordTransaction(_gameState.GameTime, $"Purchased aircraft: {model}", -purchasePrice);
 
+        // Auto-hire and assign crew to new aircraft (1 pilot + 1 cabin crew)
+        var pilot = new Crew(
+            _gameState.NextCrewId++,
+            $"Pilot {aircraft.Id}",
+            "Pilot",
+            5000m
+        )
+        {
+            HiredDate = _gameState.GameTime,
+            AssignedAircraftId = aircraft.Id
+        };
+
+        var cabinCrew = new Crew(
+            _gameState.NextCrewId++,
+            $"Crew {aircraft.Id}",
+            "CabinCrew",
+            3000m
+        )
+        {
+            HiredDate = _gameState.GameTime,
+            AssignedAircraftId = aircraft.Id
+        };
+
+        _gameState.Crew.Add(pilot);
+        _gameState.Crew.Add(cabinCrew);
+        aircraft.AssignedCrewIds.Add(pilot.Id);
+        aircraft.AssignedCrewIds.Add(cabinCrew.Id);
+
+        _financeManager.RecordTransaction(_gameState.GameTime, $"Hired crew for {model}", -(5000m + 3000m));
+
         return true;
     }
 
